@@ -1,7 +1,8 @@
-sudo -i <<'EOF'
-if [ "$EUID" -ne 0 ]; then 
-  echo "Please run as root"
-  exit
+#!/bin/bash
+
+if [ "$EUID" -ne 0 ]; then
+    echo "Please run as root"
+    exit
 fi
 
 if ! command -v docker &> /dev/null; then
@@ -14,25 +15,42 @@ else
 fi
 
 mkdir -p /etc/pterodactyl
-curl -L -o /usr/local/bin/wings "https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
+
+arch=$(uname -m)
+
+if [[ "$arch" == "x86_64" ]]; then
+    wings_url="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64"
+elif [[ "$arch" == "aarch64" ]]; then
+    wings_url="https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_arm64"
+else
+    echo "Unsupported architecture: $arch"
+    exit 1
+fi
+
+echo "Detected architecture: $arch"
+echo "Downloading Wings: $wings_url"
+
+curl -L -o /usr/local/bin/wings "$wings_url"
 chmod +x /usr/local/bin/wings
 
-cat <<UNIT > /etc/systemd/system/wings.service
+cat <<EOF > /etc/systemd/system/wings.service
 [Unit]
 Description=Pterodactyl Wings Daemon
 After=docker.service
 Requires=docker.service
-Partof=docker.service
+
 [Service]
 User=root
 WorkingDir=/etc/pterodactyl
 LimitNOFILE=4096
 ExecStart=/usr/local/bin/wings
 Restart=on-failure
+StartLimitInterval=180
+
 [Install]
 WantedBy=multi-user.target
-UNIT
+EOF
 
 systemctl daemon-reload
-echo -e "\n\e[1;32m=== SETUP COMPLETE! PASTE YOUR CONFIG COMMAND BELOW ===\e[0m\n"
-EOF
+
+echo -e "\n=== SETUP COMPLETE! Paste your Wings token below (not Configuration File) ===\n"
